@@ -65,39 +65,43 @@ struct SensorDataStructure {
 //testing
 float sensorData = 1.0;
 // Queue<dataPacket> queue = Queue<dataPacket>(10);
-
+dataPacket messagePacket;
+char packetNum = 1;
 SemaphoreHandle_t xSemaphore;
 
-//void receiveData(void *p) {
-//  xSemaphore = xSemaphoreCreateBinary();
-//  while (1) {
+void receiveData(void *p) {
+  //xSemaphore = xSemaphoreCreateBinary();
+  TickType_t xLastWakeTime;
+  const TickType_t xFrequency = 30;
+
+  // Initialise the xLastWakeTime variable with the current time.
+  xLastWakeTime = xTaskGetTickCount();
+
+  while (1) {
 //    if( xSemaphoreTake( xSemaphore, ( TickType_t ) 0 ) ) {
-//      Serial.println("receiveData");
-////      ExecuteHandSensor();
-////      ExecuteForearmSensor();
-////      ExecuteBackSensor();
-////    
-////      // convert to dataPacket
-////      dataPacket messagePacket;
-////      messagePacket.packetId = MESSAGE;
-////    
-////      messagePacket.deviceId = HAND_ID;
-////      messagePacket.deviceId2 = FOREARM_ID;
-////      messagePacket.deviceId3 = BACK_ID;
-////    
-////      transferDataFloatsToPacket(messagePacket.data, HAND_ID);
-////      transferDataFloatsToPacket(messagePacket.data, FOREARM_ID);
-////      transferDataFloatsToPacket(messagePacket.data, BACK_ID);
-////  
-////      queue.push(messagePacket);
+    Serial.println("receiveData");
+    ExecuteHandSensor();
+    ExecuteForearmSensor();
+    ExecuteBackSensor();
+  
+    // convert to dataPacket
+    messagePacket.packetId = MESSAGE;
+  
+    messagePacket.deviceId = HAND_ID;
+    messagePacket.deviceId2 = FOREARM_ID;
+    messagePacket.deviceId3 = BACK_ID;
+  
+    transferDataFloatsToPacket(messagePacket.data, HAND_ID);
+    transferDataFloatsToPacket(messagePacket.data, FOREARM_ID);
+    transferDataFloatsToPacket(messagePacket.data, BACK_ID);
+//  
+//      queue.push(messagePacket);
 //      xSemaphoreGive(xSemaphore);
-//
-//    }
-//
-//    const TickType_t xDelay = 50;
-//    vTaskDelay(xDelay);
-//  }
-//}
+   
+    // Wait for the next cycle.
+    vTaskDelayUntil( &xLastWakeTime, xFrequency );
+  }
+}
 
 void transferDataFloatsToPacket(float *arr, char deviceId) {
   int startingIndex = 0;
@@ -148,26 +152,30 @@ void transferDataFloatsToPacket(float *arr, char deviceId) {
 }
 
 void sendPackets(void *p) {
+  TickType_t xLastWakeTime;
+  const TickType_t xFrequency = 30;
+
+  // Initialise the xLastWakeTime variable with the current time.
+  xLastWakeTime = xTaskGetTickCount();
   while(1) {
     Serial.println("sendPackets");
 //      if (queue.count() > 0) {
 
-    ExecuteHandSensor();
-    ExecuteForearmSensor();
-    ExecuteBackSensor();
-  
-    // convert to dataPacket
-    dataPacket messagePacket;
-    messagePacket.packetId = MESSAGE;
-  
-    messagePacket.deviceId = HAND_ID;
-    messagePacket.deviceId2 = FOREARM_ID;
-    messagePacket.deviceId3 = BACK_ID;
-  
-    transferDataFloatsToPacket(messagePacket.data, HAND_ID);
-    transferDataFloatsToPacket(messagePacket.data, FOREARM_ID);
-    transferDataFloatsToPacket(messagePacket.data, BACK_ID);
-//    dataPacket messagePacket = queue.pop();
+//    ExecuteHandSensor();
+//    ExecuteForearmSensor();
+//    ExecuteBackSensor();
+//  
+//    // convert to dataPacket
+//    dataPacket messagePacket;
+//    messagePacket.packetId = MESSAGE;
+//  
+//    messagePacket.deviceId = HAND_ID;
+//    messagePacket.deviceId2 = FOREARM_ID;
+//    messagePacket.deviceId3 = BACK_ID;
+//  
+//    transferDataFloatsToPacket(messagePacket.data, HAND_ID);
+//    transferDataFloatsToPacket(messagePacket.data, FOREARM_ID);
+//    transferDataFloatsToPacket(messagePacket.data, BACK_ID);
       
     // serialise into packets and send
     serialize(sendBuffer, &messagePacket);
@@ -214,8 +222,11 @@ void sendPackets(void *p) {
 
     if (ackFailed == 1) {
       Serial.println("ack failed!");
-      Serial3.write(sendBuffer);
+      // Serial3.write(sendBuffer);
     }
+
+    // Wait for the next cycle.
+    vTaskDelayUntil( &xLastWakeTime, xFrequency );      
   }
 }
 
@@ -246,7 +257,7 @@ void setup() {
   // sendPackets();
   
   xTaskCreate(sendPackets, "sendPackets", STACK_SIZE, NULL, 1, NULL);
-//  xTaskCreate(receiveData, "receiveData", STACK_SIZE, NULL, 2, NULL);
+  xTaskCreate(receiveData, "receiveData", STACK_SIZE, NULL, 2, NULL);
   vTaskStartScheduler();
 }
 
@@ -409,10 +420,10 @@ int startHandshake(){
 }
   
 void ReadMPUValues() {
-//  Wire.beginTransmission(MPU);      // Begins communication with the MPU
-//  Wire.write(0x3B);                 // Register 0x3B upper 8 bits of x-axis acceleration data
-//  Wire.endTransmission(false);      // End communication
-//  Wire.requestFrom(MPU, 12, true);  // Request 12 registers
+  Wire.beginTransmission(MPU);      // Begins communication with the MPU
+  Wire.write(0x3B);                 // Register 0x3B upper 8 bits of x-axis acceleration data
+  Wire.endTransmission(false);      // End communication
+  Wire.requestFrom(MPU, 12, true);  // Request 12 registers
 
   // testing with sample data
   SensorData.AccX  = sensorData; // Reads in raw x-axis acceleration data
@@ -421,16 +432,15 @@ void ReadMPUValues() {
   SensorData.GyroX = sensorData; // Reads in raw x-axis gyroscope data
   SensorData.GyroY = sensorData; // Reads in raw y-axis gyroscope data
   SensorData.GyroZ = sensorData; // Reads in raw z-axis gyroscope data
-
-  sensorData += 2.0;
+//  sensorData += 2.0;
   
-//  SensorData.AccX  = Wire.read() << 8 | Wire.read(); // Reads in raw x-axis acceleration data
-//  SensorData.AccY  = Wire.read() << 8 | Wire.read(); // Reads in raw y-axis acceleration data
-//  SensorData.AccZ  = Wire.read() << 8 | Wire.read(); // Reads in raw z-axis acceleration data
-//  Wire.read(); Wire.read();                          // Reads in raw temperature data
-//  SensorData.GyroX = Wire.read() << 8 | Wire.read(); // Reads in raw x-axis gyroscope data
-//  SensorData.GyroY = Wire.read() << 8 | Wire.read(); // Reads in raw y-axis gyroscope data
-//  SensorData.GyroZ = Wire.read() << 8 | Wire.read(); // Reads in raw z-axis gyroscope data
+  SensorData.AccX  = Wire.read() << 8 | Wire.read(); // Reads in raw x-axis acceleration data
+  SensorData.AccY  = Wire.read() << 8 | Wire.read(); // Reads in raw y-axis acceleration data
+  SensorData.AccZ  = Wire.read() << 8 | Wire.read(); // Reads in raw z-axis acceleration data
+  Wire.read(); Wire.read();                          // Reads in raw temperature data
+  SensorData.GyroX = Wire.read() << 8 | Wire.read(); // Reads in raw x-axis gyroscope data
+  SensorData.GyroY = Wire.read() << 8 | Wire.read(); // Reads in raw y-axis gyroscope data
+  SensorData.GyroZ = Wire.read() << 8 | Wire.read(); // Reads in raw z-axis gyroscope data
 }
 
 void PrintMPUValues(SensorDataStructure SDS) {
@@ -454,16 +464,16 @@ void CallibrateMPUValues() {
 
 void UpdateMPUSensorData() {
   CallibrateMPUValues();
-//  if (!digitalRead(HAND)) {
-//    HandSensorData = SensorData;
-//    Serial.println("Hand MPU6050 Readings");
-//  } else if (!digitalRead(FOREARM)) {
-//    ForearmSensorData = SensorData;
-//    Serial.println("Forearm MPU6050 Readings");
-//  } else if (!digitalRead(BACK)) {
-//    BackSensorData = SensorData;
-//    Serial.println("Back MPU6050 Readings");
-//  }
+  if (!digitalRead(HAND)) {
+    HandSensorData = SensorData;
+    Serial.println("Hand MPU6050 Readings");
+  } else if (!digitalRead(FOREARM)) {
+    ForearmSensorData = SensorData;
+    Serial.println("Forearm MPU6050 Readings");
+  } else if (!digitalRead(BACK)) {
+    BackSensorData = SensorData;
+    Serial.println("Back MPU6050 Readings");
+  }
 }
 
 void DeactivateSensors() {
@@ -473,32 +483,32 @@ void DeactivateSensors() {
 }
 
 void ExecuteHandSensor() {
-//  DeactivateSensors();
-//  digitalWrite(HAND, LOW);  // Activates hand sensor
+  DeactivateSensors();
+  digitalWrite(HAND, LOW);  // Activates hand sensor
 //  delay(50);
   ReadMPUValues();
   UpdateMPUSensorData();
-  HandSensorData = SensorData;
+  // HandSensorData = SensorData;
   // PrintMPUValues(HandSensorData);
 }
 
 void ExecuteForearmSensor() {
-//  DeactivateSensors();
-//  digitalWrite(FOREARM, LOW); // Activates forearm sensor
+  DeactivateSensors();
+  digitalWrite(FOREARM, LOW); // Activates forearm sensor
 //  delay(50);
   ReadMPUValues();
   UpdateMPUSensorData();
-  ForearmSensorData = SensorData;
+  // ForearmSensorData = SensorData;
   // PrintMPUValues(ForearmSensorData);
 }
 
 void ExecuteBackSensor() {
-//  DeactivateSensors();
-//  digitalWrite(BACK, LOW);  // Activates back sensor
+  DeactivateSensors();
+  digitalWrite(BACK, LOW);  // Activates back sensor
 //  delay(50);
   ReadMPUValues();
   UpdateMPUSensorData();
-  BackSensorData = SensorData;
+  // BackSensorData = SensorData;
   // PrintMPUValues(BackSensorData);
 }
 
