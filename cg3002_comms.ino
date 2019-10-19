@@ -1,12 +1,10 @@
 #include <Arduino.h>
 #include <Arduino_FreeRTOS.h>
-#include <semphr.h>
 #include <Wire.h>
-#include "Queue.h"
 
-#define HAND 2    // Sets Digital 2 pin as hand sensor
+#define HAND 4    // Sets Digital 2 pin as hand sensor
 #define FOREARM 3 // Sets Digital 3 pin as forearm sensor
-#define BACK 4    // Sets Digital 4 pin as back sensor
+#define BACK 2    // Sets Digital 4 pin as back sensor
 
 #define NODEVICE 0
 #define HAND_ID 1
@@ -18,7 +16,7 @@
 #define FOREARM_ID_STRING "2"
 #define BACK_ID_STRING "3"
 
-#define STACK_SIZE 200
+#define STACK_SIZE 1200
 
 #define NACK 0
 #define ACK 1
@@ -33,7 +31,7 @@
 #define TERMINATE_STRING "4"
 
 char debugBuffer[500];
-char sendBuffer[500];
+char sendBuffer[1000];
 char receiveBuffer[30];
 
 short gyroX=0;
@@ -53,6 +51,36 @@ typedef struct packet {
 
 const int MPU = 0x68; // MPU6050 I2C addresses
 
+//power variables
+// Constants
+const int CURRENT_PORT = A0;           // Input pin for measuring Vout
+const int VOLTAGE_PORT = A1;
+const int RS = 10;                      // Shunt resistor value (in ohms)
+const int VOLTAGE_REF = 5;              // Reference voltage for analog read
+const int RL = 10000;                   // Load resistor value (in ohms)
+const int resistance_ina169  = 1000;    // Resistor multiplier due to internal of sensor (in ohms)
+
+// Global Variables
+float rawCurrentReading;      // Variable to store value from analog read
+float scaledCurrentReading;   // Variable to store the scaled value from the analog value
+float current;
+float RS2 = 0.1;
+
+float voltageReading;
+float scaledVoltage;
+float voltage;
+float x;
+float y;
+
+unsigned long energy;
+unsigned long timeVal;
+unsigned long prevTime;
+unsigned long currTime;
+float energyVal;
+float power;
+
+int dataCount=0;
+
 struct SensorDataStructure {
   float AccX;  // Accelerometer x-axis value for MPU6050
   float AccY;  // Accelerometer y-axis value for MPU6050
@@ -62,45 +90,98 @@ struct SensorDataStructure {
   float GyroZ; // Gyrometer z-axis value for MPU6050
 } HandSensorData, ForearmSensorData, BackSensorData, SensorData;
 
+// function headers
+void calcPower();
+void transferDataFloatsToPacket(float *, char);
+void sendPackets(void *);
+unsigned int serialize(char *, dataPacket *);
+int startHandshake();
+void ReadMPUValues();
+void PrintMPUValues(SensorDataStructure);
+void CallibrateMPUValues();
+void UpdateMPUSensorData();
+void DeactivateSensors();
+void ExecuteSensor(int, SensorDataStructure);
+
 //testing
 float sensorData = 1.0;
 // Queue<dataPacket> queue = Queue<dataPacket>(10);
 dataPacket messagePacket;
 char packetNum = 1;
-SemaphoreHandle_t xSemaphore;
+int newMessageCount = 0;
 
-void receiveData(void *p) {
-  //xSemaphore = xSemaphoreCreateBinary();
-  TickType_t xLastWakeTime;
-  const TickType_t xFrequency = 30;
+void setup() {
+  // put your setup code here, to run once:
+  pinMode(HAND, OUTPUT);        // Sets hand digital pin as output pin
+  pinMode(FOREARM, OUTPUT);     // Sets forearm digital pin as output pin
+  pinMode(BACK, OUTPUT);        // Sets back digital pin as output pin
+  
+  Wire.begin();                 // Initiates I2C communication
+  Wire.beginTransmission(MPU);  // Begins communication with the MPU
+  Wire.write(0x6B);             // Access the power management register
+  Wire.write(0x00);             // Wakes up the MPU
+  Wire.endTransmission(true);   // Communication done
 
-  // Initialise the xLastWakeTime variable with the current time.
-  xLastWakeTime = xTaskGetTickCount();
+  Serial.begin(115200);
+  Serial3.begin(115200);
 
-  while (1) {
-//    if( xSemaphoreTake( xSemaphore, ( TickType_t ) 0 ) ) {
-    Serial.println("receiveData");
-    ExecuteHandSensor();
-    ExecuteForearmSensor();
-    ExecuteBackSensor();
-  
-    // convert to dataPacket
-    messagePacket.packetId = MESSAGE;
-  
-    messagePacket.deviceId = HAND_ID;
-    messagePacket.deviceId2 = FOREARM_ID;
-    messagePacket.deviceId3 = BACK_ID;
-  
-    transferDataFloatsToPacket(messagePacket.data, HAND_ID);
-    transferDataFloatsToPacket(messagePacket.data, FOREARM_ID);
-    transferDataFloatsToPacket(messagePacket.data, BACK_ID);
-//  
-//      queue.push(messagePacket);
-//      xSemaphoreGive(xSemaphore);
-   
-    // Wait for the next cycle.
-    vTaskDelayUntil( &xLastWakeTime, xFrequency );
+  int ishandShakeSuccess = startHandshake();
+  if (ishandShakeSuccess == 0) {
+    Serial.println("handshake failed");
+    return;
   }
+  else if (ishandShakeSuccess == 1) {
+    Serial.println("handshake success");
+  }
+
+  //delay(10);
+
+  //sendPackets();
+  
+  xTaskCreate(sendPackets, "sendPackets", STACK_SIZE, NULL, 2, NULL);
+//  //xTaskCreate(receiveData, "receiveData", STACK_SIZE, NULL, 2, NULL);
+  vTaskStartScheduler();
+}
+
+void calcPower() {
+//  scaledVoltage = 2.0;
+//  current = 2.0;
+//  energyVal = 2.0;
+//  power = 2.0;
+  
+  // Read sensor value from INA169
+  rawCurrentReading = analogRead(CURRENT_PORT);
+
+  // Scale the value to supply voltage that is 5V
+  scaledCurrentReading = (rawCurrentReading * VOLTAGE_REF) / 1023; //send
+
+  // Is = (Vout x 1k) / (RS x RL)
+  current = (scaledCurrentReading) / (RS2 * 10);
+//  Serial.print("Current: ");
+//  Serial.print(current, 9);
+//  Serial.println(" A");
+
+
+  voltageReading = analogRead(VOLTAGE_PORT);
+  scaledVoltage = (voltageReading * 5.0 * 2) / 1023;
+
+//  Serial.print("Voltage: ");
+//  Serial.print(scaledVoltage, 3);
+//  Serial.println(" V");
+
+  currTime = millis();
+  power = scaledVoltage * scaledCurrentReading;
+  energyVal += (current * scaledVoltage *  (currTime - prevTime)/ 1000) / 3600;
+
+  prevTime = currTime;
+//
+//  Serial.print("Energy: ");
+//  Serial.print(energyVal, 3);
+//  Serial.println(" Wh");
+//
+//  Serial.print("Power: ");
+//  Serial.print(power, 3);
+//  Serial.println(" W");
 }
 
 void transferDataFloatsToPacket(float *arr, char deviceId) {
@@ -151,36 +232,47 @@ void transferDataFloatsToPacket(float *arr, char deviceId) {
   }
 }
 
+void ExecuteSensor(int value, SensorDataStructure sds) {
+  DeactivateSensors();
+  digitalWrite(value, LOW);  // Activates sensor
+  //delay(100);
+  ReadMPUValues();
+  UpdateMPUSensorData();
+  PrintMPUValues(sds);
+}
+
 void sendPackets(void *p) {
-  TickType_t xLastWakeTime;
-  const TickType_t xFrequency = 30;
-
-  // Initialise the xLastWakeTime variable with the current time.
-  xLastWakeTime = xTaskGetTickCount();
+//  TickType_t xLastWakeTime;
+//  const TickType_t xFrequency = 1;
+//
+// // Initialise the xLastWakeTime variable with the current time.
+//  xLastWakeTime = xTaskGetTickCount();
   while(1) {
-    Serial.println("sendPackets");
-//      if (queue.count() > 0) {
+    //TickType_t xCurrWakeTime = xTaskGetTickCount();
 
-//    ExecuteHandSensor();
-//    ExecuteForearmSensor();
-//    ExecuteBackSensor();
-//  
-//    // convert to dataPacket
-//    dataPacket messagePacket;
-//    messagePacket.packetId = MESSAGE;
-//  
-//    messagePacket.deviceId = HAND_ID;
-//    messagePacket.deviceId2 = FOREARM_ID;
-//    messagePacket.deviceId3 = BACK_ID;
-//  
-//    transferDataFloatsToPacket(messagePacket.data, HAND_ID);
-//    transferDataFloatsToPacket(messagePacket.data, FOREARM_ID);
-//    transferDataFloatsToPacket(messagePacket.data, BACK_ID);
-      
-    // serialise into packets and send
+    ExecuteSensor(HAND, HandSensorData);
+    ExecuteSensor(FOREARM, ForearmSensorData);
+    ExecuteSensor(BACK, BackSensorData);
+  
+    // convert to dataPacket
+    dataPacket messagePacket;
+    messagePacket.packetId = MESSAGE;
+  
+    messagePacket.deviceId = HAND_ID;
+    messagePacket.deviceId2 = FOREARM_ID;
+    messagePacket.deviceId3 = BACK_ID;
+  
+    transferDataFloatsToPacket(messagePacket.data, HAND_ID);
+    transferDataFloatsToPacket(messagePacket.data, FOREARM_ID);
+    transferDataFloatsToPacket(messagePacket.data, BACK_ID);
+  
+    calcPower();
+    
+      // serialise into packets and send
     serialize(sendBuffer, &messagePacket);
-    Serial3.write(sendBuffer);
-     
+    int bytesWritten = Serial3.write(sendBuffer);
+    //Serial.println(bytesWritten);
+  
     // receive ack from RPi
     int numBytes = 0;
     char packetLength = -1;
@@ -189,7 +281,7 @@ void sendPackets(void *p) {
     int loopCounter = 0;
     int ackFailed = 0;
     while (numBytes < 3) {
-      Serial.println("waiting for ack for message");
+      //Serial.println("waiting for ack for message");
   
       if (Serial3.available() > 0) {
         if (numBytes == 0)
@@ -203,7 +295,7 @@ void sendPackets(void *p) {
   
       loopCounter++;
       if (loopCounter == 30) {
-        Serial.println("waited for ack too long");
+        //Serial.println("waited for ack too long");
         ackFailed = 1;
         break;
       }
@@ -215,54 +307,28 @@ void sendPackets(void *p) {
       if (packetid != ACK) {
         ackFailed = 1;
       }
+      else if (packetid == ACK)
+        dataCount++;
     }
     else {
       ackFailed = 1;
     }  
-
+  
     if (ackFailed == 1) {
-      Serial.println("ack failed!");
+      //Serial.println("ack failed!");
       // Serial3.write(sendBuffer);
     }
-
-    // Wait for the next cycle.
-    vTaskDelayUntil( &xLastWakeTime, xFrequency );      
-  }
-}
-
-void setup() {
-  // put your setup code here, to run once:
-  pinMode(HAND, OUTPUT);        // Sets hand digital pin as output pin
-  pinMode(FOREARM, OUTPUT);     // Sets forearm digital pin as output pin
-  pinMode(BACK, OUTPUT);        // Sets back digital pin as output pin
   
-  Wire.begin();                 // Initiates I2C communication
-  Wire.beginTransmission(MPU);  // Begins communication with the MPU
-  Wire.write(0x6B);             // Access the power management register
-  Wire.write(0x00);             // Wakes up the MPU
-  Wire.endTransmission(true);   // Communication done
-
-  Serial.begin(115200);
-  Serial3.begin(9600);
-
-  int ishandShakeSuccess = startHandshake();
-  if (ishandShakeSuccess == 0) {
-    Serial.println("handshake failed");
-    return;
+    //Serial.println(dataCount);
+    delay(5);
+//    // Wait for the next cycle.
+    //vTaskDelayUntil(&xLastWakeTime, xFrequency);
   }
-  else if (ishandShakeSuccess == 1) {
-    Serial.println("handshake success");
-  }
-
-  // sendPackets();
-  
-  xTaskCreate(sendPackets, "sendPackets", STACK_SIZE, NULL, 1, NULL);
-  xTaskCreate(receiveData, "receiveData", STACK_SIZE, NULL, 2, NULL);
-  vTaskStartScheduler();
 }
 
 void loop() {
   // put your main code here, to run repeatedly:
+  // sendPackets();
 }
 
 unsigned int serialize(char *buf, dataPacket *p) {
@@ -309,17 +375,39 @@ unsigned int serialize(char *buf, dataPacket *p) {
       }
     }
 
+    // voltage, current, power, energy
+    //checksum ^= (int)scaledVoltage;
+    dtostrf(scaledVoltage, 1, 2, sensorDataBuf);
+    strcat(buf, sensorDataBuf);
+    strcat(buf, "(");
+    
+    //checksum ^= (int)current;
+    dtostrf(current, 1, 2, sensorDataBuf);
+    strcat(buf, sensorDataBuf);
+    strcat(buf, "(");
+
+    //checksum ^= (int)power;
+    dtostrf(power, 1, 2, sensorDataBuf);
+    strcat(buf, sensorDataBuf);
+    strcat(buf, "(");
+
+    //checksum ^= (int)energyVal;
+    dtostrf(energyVal, 1, 2, sensorDataBuf);
+    strcat(buf, sensorDataBuf);
+    strcat(buf, "(");
+
     // evaluate and append checksum
     dtostrf(checksum, 1, 0, sensorDataBuf);
     strcat(buf, sensorDataBuf);
   }  
-  
+//  Serial.print("checksum: ");
+//  Serial.println(checksum);
   strcat(buf, "\n");
 }
 
 int startHandshake(){
 
-  Serial.println("Starting handshake..");
+  //Serial.println("Starting handshake..");
   int handShakeStage = 0;
 
   char nonDataBuf[4];
@@ -347,9 +435,9 @@ int startHandshake(){
  }
 
   Serial.println("some bytes received");
-  dprintf("packetLength: %d", packetLength);
-  dprintf("packetid: %d", packetid);
-  dprintf("checksum: %d", checksum);
+//  dprintf("packetLength: %d", packetLength);
+//  dprintf("packetid: %d", packetid);
+//  dprintf("checksum: %d", checksum);
 
   // checksum correct
   if (checksum == packetid) {
@@ -398,9 +486,9 @@ int startHandshake(){
       break;
  }
 
-  dprintf("packetLength: %d", packetLength);
-  dprintf("packetid: %d", packetid);
-  dprintf("checksum: %d", checksum);
+//  dprintf("packetLength: %d", packetLength);
+//  dprintf("packetid: %d", packetid);
+//  dprintf("checksum: %d", checksum);
   // checksum correct
   if (checksum == packetid) {
     // ack received
@@ -425,13 +513,13 @@ void ReadMPUValues() {
   Wire.endTransmission(false);      // End communication
   Wire.requestFrom(MPU, 12, true);  // Request 12 registers
 
-  // testing with sample data
-  SensorData.AccX  = sensorData; // Reads in raw x-axis acceleration data
-  SensorData.AccY  = sensorData; // Reads in raw y-axis acceleration data
-  SensorData.AccZ  = sensorData; // Reads in raw z-axis acceleration data
-  SensorData.GyroX = sensorData; // Reads in raw x-axis gyroscope data
-  SensorData.GyroY = sensorData; // Reads in raw y-axis gyroscope data
-  SensorData.GyroZ = sensorData; // Reads in raw z-axis gyroscope data
+//  // testing with sample data
+//  SensorData.AccX  = sensorData; // Reads in raw x-axis acceleration data
+//  SensorData.AccY  = sensorData; // Reads in raw y-axis acceleration data
+//  SensorData.AccZ  = sensorData; // Reads in raw z-axis acceleration data
+//  SensorData.GyroX = sensorData; // Reads in raw x-axis gyroscope data
+//  SensorData.GyroY = sensorData; // Reads in raw y-axis gyroscope data
+//  SensorData.GyroZ = sensorData; // Reads in raw z-axis gyroscope data
 //  sensorData += 2.0;
   
   SensorData.AccX  = Wire.read() << 8 | Wire.read(); // Reads in raw x-axis acceleration data
@@ -466,13 +554,13 @@ void UpdateMPUSensorData() {
   CallibrateMPUValues();
   if (!digitalRead(HAND)) {
     HandSensorData = SensorData;
-    Serial.println("Hand MPU6050 Readings");
+    //Serial.println("Hand MPU6050 Readings");
   } else if (!digitalRead(FOREARM)) {
     ForearmSensorData = SensorData;
-    Serial.println("Forearm MPU6050 Readings");
+    //Serial.println("Forearm MPU6050 Readings");
   } else if (!digitalRead(BACK)) {
     BackSensorData = SensorData;
-    Serial.println("Back MPU6050 Readings");
+    //Serial.println("Back MPU6050 Readings");
   }
 }
 
@@ -480,48 +568,4 @@ void DeactivateSensors() {
   digitalWrite(HAND, HIGH);     // Deactivates hand sensor
   digitalWrite(FOREARM, HIGH);  // Deactivates forearm sensor
   digitalWrite(BACK, HIGH);     // Deactivates back sensor
-}
-
-void ExecuteHandSensor() {
-  DeactivateSensors();
-  digitalWrite(HAND, LOW);  // Activates hand sensor
-//  delay(50);
-  ReadMPUValues();
-  UpdateMPUSensorData();
-  // HandSensorData = SensorData;
-  // PrintMPUValues(HandSensorData);
-}
-
-void ExecuteForearmSensor() {
-  DeactivateSensors();
-  digitalWrite(FOREARM, LOW); // Activates forearm sensor
-//  delay(50);
-  ReadMPUValues();
-  UpdateMPUSensorData();
-  // ForearmSensorData = SensorData;
-  // PrintMPUValues(ForearmSensorData);
-}
-
-void ExecuteBackSensor() {
-  DeactivateSensors();
-  digitalWrite(BACK, LOW);  // Activates back sensor
-//  delay(50);
-  ReadMPUValues();
-  UpdateMPUSensorData();
-  // BackSensorData = SensorData;
-  // PrintMPUValues(BackSensorData);
-}
-
-void debugPrint(const char *str)
-{
-Serial.println(str);
-Serial.flush();
-}
-void dprintf(const char *fmt, ...)
-{
-va_list argptr;
-va_start(argptr, fmt);
-vsprintf(debugBuffer, fmt, argptr);
-va_end(argptr);
-debugPrint(debugBuffer);
 }

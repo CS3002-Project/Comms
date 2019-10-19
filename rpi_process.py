@@ -15,13 +15,12 @@ import sys
 import binascii
 import pandas as pd
 import os
+import numpy as np
 
-# list that will stores as csv
-csv_data = pd.DataFrame()
 
 #initialise serial port
 port = "/dev/ttyS0"
-ser = serial.Serial(port, baudrate=9600)
+ser = serial.Serial(port, baudrate=115200)
 
 # packet/device ids
 nack = 0
@@ -33,7 +32,6 @@ forearm = 2
 back = 3
 
 timestamp = 0
-
 # serial comm variables
 receiveBuffer = []
 bufferLengthLimit = 15
@@ -43,14 +41,14 @@ bs = 32; #base_size
 key = "1234567890123456"
 x = 0
 
-if len(sys.argv) != 3 :
-    print('Invalid number of arguments')
-    print('python3 myclient.py [IP address] [Port]')
-    sys.exit()
+#if len(sys.argv) != 3 :
+#    print('Invalid number of arguments')
+#    print('python3 myclient.py [IP address] [Port]')
+#    sys.exit()
 # host = 'localhost'
 # PORT_NUM = 7654
-host = sys.argv[1]
-PORT_NUM = int(sys.argv[2])
+#host = sys.argv[1]
+#PORT_NUM = int(sys.argv[2])
 
 def encryptText(plainText, key):
     raw = pad(plainText)
@@ -65,25 +63,27 @@ def pad(var1):
 
 def connectToServer(ip_addr, port_num):
 	global sock
+	print("Initialising the socket..")
 	sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 	print("Connecting to server...")
 	try:
-		sock.connect(ip_addr, port_num)
+		sock.connect((ip_addr, port_num))
 	except:
-        debug("Connection to Server failed.")
-        return False
-    return True
+        	print("Connection to Server failed.")
+        	return False
+	return True
 
 def calculateChecksum(readingsarr, voltage, current, power, energy):
 	checksum = 0
-	for reading in readingsarr:
-		readingInt = int(reading)
+
+	for i in range(3, len(readingsarr)):
+		readingInt = int(readingsarr[i])
 		checksum = checksum ^ readingInt
 
-	checksum = checksum ^ (int)voltage
-	checksum = checksum ^ (int)current
-	checksum = checksum ^ (int)power
-	checksum = checksum ^ (int)energy
+	# checksum = checksum ^ int(voltage)
+	# checksum = checksum ^ int(current)
+	# checksum = checksum ^ int(power)
+	# checksum = checksum ^ int(energy)
 
 	return checksum
 
@@ -111,6 +111,11 @@ def handshake():
 
 	print("ack received")
 
+	# time1 = time.time()
+	# time2 = time.time()
+
+	# while (time2 - time1) < 1:
+	# 	time2 = time.time()
 	# send ack packet to Arduino
 	ser.write(b'\x01\x01\x01')
 
@@ -127,6 +132,12 @@ def receiveSensorData():
 	deviceid2 = -1
 	deviceid3 = -1
 	checksum = -1
+	global timestamp
+	global csv_data
+	csv_data = pd.DataFrame()
+	timeBefore = time.time()
+	numReceivedString = 0
+	numCorrectData = 0
 
 	while 1:
 #		print("in receive sensor data loop\n")
@@ -135,12 +146,17 @@ def receiveSensorData():
 		current = 0
 		power = 0
 		energy = 0
-		if receiveBuffer:
-			#receivedString = ser.read_until().decode("utf-8")
-			print(len(receiveBuffer))
-			receivedString = receiveBuffer.pop(0)
-
-
+		if ser.in_waiting:
+			try:
+				# receivedString = ser.read_until().decode("utf-8")
+				receivedString = ser.readline().decode("utf-8")
+			except Exception as e:
+				print(e)
+				print("error")
+				continue
+			#print(len(receiveBuffer))
+			#receivedString = receiveBuffer.pop(0)
+			numReceivedString = numReceivedString + 1
 			receivedString = receivedString[:-1]
 			receivedString = receivedString.lstrip('#')
 			try:
@@ -161,6 +177,12 @@ def receiveSensorData():
 						power = float(receivedString.split('(')[6])
 						energy = float(receivedString.split('(')[7])
 						checksumArduino = float(int(receivedString.split('(')[8]))
+						# print("checksum arduino")
+						# print(checksumArduino)
+						# print(voltage)
+						# print(current)
+						# print(power)
+						# print(energy)
 
 						handsensorAccx = float(handsensor.split(';')[0])
 						handsensorAccy = float(handsensor.split(';')[1])
@@ -184,9 +206,9 @@ def receiveSensorData():
 						backsensorGyroz = float(backsensor.split(';')[5])
 
 						readingsArr = []
-						timestamp += 2000
+						#timestamp = timestamp + 2000
 
-						# timestamp = time.time()
+						timestamp = time.time()
 						readingsArr.append(0)
 						readingsArr.append(timestamp)
 						readingsArr.append(timestamp * (10 ** 6))
@@ -209,22 +231,28 @@ def receiveSensorData():
 						readingsArr.append(backsensorGyroy)
 						readingsArr.append(backsensorGyroz)
 
-						checksumPi = calculateChecksum(readingsArr, voltage, current, power, energy)
-						
-						if checksumPi == checksumArduino:
-							print("checksum correct!")
-
+						# checksumPi = calculateChecksum(readingsArr, voltage, current, power, energy)
+						# print("checksum pi")
+						# print(checksumPi)
+						# if checksumPi == checksumArduino:
+						#print("checksum correct!")
 							# send ack to arduino
-							ser.write(b'\x01\x01\x01')
-							ser.write(b'\x01\x00\x00')
-							readingsarr = np.array(readingsarr)
-							csv_data = csv_data.append(pd.DataFrame(readingsarr.flatten()))
-							print(readingsArr)
-							isCheckSumSuccess = True
-						else:
-							print("checksum wrong")
-							# send nack to arduino
-							npdata = np.array(data)
+						ser.write(b'\x01\x01\x01')
+						readingsarr = np.array(readingsArr)
+						readingsarr = readingsarr.reshape(-1, len(readingsarr))
+						csv_data = csv_data.append(pd.DataFrame(readingsarr))
+						# print(readingsArr)
+						# print(voltage)
+						# print(current)
+						# print(power)
+						# print(energy)
+						isCheckSumSuccess = True
+						numCorrectData = numCorrectData + 1
+						# else:
+						# 	print("checksum wrong")
+						# 	# send nack to arduino
+						# 	ser.write(b'\x01\x00\x00')
+						# 	#npdata = np.array(data)
 				else:
 					print("Received packet not message")
 					continue
@@ -232,9 +260,15 @@ def receiveSensorData():
 			except ValueError or IndexError:
 				print("Error while parsing received string!")
 				continue
-			export_csv = csv_data.to_csv('sensor_data.csv', index = None, header=False)
+		
+		if (time.time() - timeBefore) > 10:
+			print("10 seconds over!")
+			print(numReceivedString)
+			print(numCorrectData)
+			csv_data.to_csv('sensor_data.csv', index = None, header=False)
+			break
 
-		if isCheckSumSuccess:
+#		if isCheckSumSuccess:
 			# machine learning predict move from data
 
 			# #send data to server
@@ -255,13 +289,14 @@ if isHandShakeSuccessful == 1:
 elif isHandShakeSuccessful == 0:
 	print("handshake failed")
 
-if (isHandShakeSuccessful == 1) and connectToServer(host, PORT_NUM):
-	t1 = threading.Thread(target=storeInBuffer)
-	t2 = threading.Thread(target=receiveSensorData)
 
-	t1.start()
-	t2.start()
+if (isHandShakeSuccessful == 1):
+	# t1 = threading.Thread(target=storeInBuffer)
+	# t2 = threading.Thread(target=receiveSensorData)
 
-	while 1:
-		pass
-	#receiveSensorData()
+	# t1.start()
+	# t2.start()
+
+	# while 1:
+	# 	#pass
+	receiveSensorData()
