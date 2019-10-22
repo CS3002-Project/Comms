@@ -36,6 +36,12 @@ timestamp = 0
 receiveBuffer = []
 bufferLengthLimit = 15
 
+#test handshake
+HELLO = ('H').encode()
+ACK = ('A').encode()
+NACK = ('N').encode()
+READY = ('R').encode()
+
 #Initialise server
 bs = 32; #base_size
 key = "1234567890123456"
@@ -67,6 +73,7 @@ def connectToServer(ip_addr, port_num):
 	sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 	print("Connecting to server...")
 	try:
+		print("Connect to server success")
 		sock.connect((ip_addr, port_num))
 	except:
         	print("Connection to Server failed.")
@@ -78,48 +85,64 @@ def calculateChecksum(readingsarr, voltage, current, power, energy):
 
 	for i in range(3, len(readingsarr)):
 		readingInt = int(readingsarr[i])
-		checksum = checksum ^ readingInt
+		checksum = int(checksum) ^ readingInt
 
 	# checksum = checksum ^ int(voltage)
 	# checksum = checksum ^ int(current)
 	# checksum = checksum ^ int(power)
 	# checksum = checksum ^ int(energy)
 
-	return checksum
+	return int(checksum)
 
 def handshake():
-	# send hello packet to Arduino
-	x = ser.write(b'\x01\x02\x02')
+    print("InitiateHandshake")
+    ser.write(HELLO)
+    time.sleep(1)
+    if ser.in_waiting > 0:
+        reply = ser.read().decode()
+        print(reply)
+        if(reply == 'A'):
+            ser.write(ACK)
+            print('Handshake Complete')
+            return True
+        else:
+            print('pending')
+    return False
 
-	# receive ack packet from Arduino
-	packetid = 0
-	checksum = -1
+# def handshake():
+# 	# send hello packet to Arduino
+# 	x = ser.write(b'\x01\x02\x02')
 
-	while 1:
-		if ser.in_waiting:
-			receivedString = ser.read_until().decode("utf-8")
-			break
-	receivedString = receivedString[:-1]
-	packetid = int(receivedString[0])
-	checksum = int(receivedString[1])
+# 	# receive ack packet from Arduino
+# 	packetid = 0
+# 	checksum = -1
 
-	if packetid == ack:
-		if packetid != checksum:
-			return 0
-	elif packetid != ack:
-		return 0
+# 	while 1:
+# 		print("waiting for ack from duino")
+# 		if ser.in_waiting:
+# 			receivedString = ser.read_until().decode("utf-8")
+# 			break
+# 	receivedString = receivedString[:-1]
+# 	packetid = int(receivedString[0])
+# 	checksum = int(receivedString[1])
 
-	print("ack received")
+# 	if packetid == ack:
+# 		if packetid != checksum:
+# 			return 0
+# 	elif packetid != ack:
+# 		return 0
 
-	# time1 = time.time()
-	# time2 = time.time()
+# 	print("ack received")
 
-	# while (time2 - time1) < 1:
-	# 	time2 = time.time()
-	# send ack packet to Arduino
-	ser.write(b'\x01\x01\x01')
+# 	# time1 = time.time()
+# 	# time2 = time.time()
 
-	return 1
+# 	# while (time2 - time1) < 1:
+# 	# 	time2 = time.time()
+# 	# send ack packet to Arduino
+# 	ser.write(b'\x01\x01\x01')
+
+# 	return 1
 
 def storeInBuffer():
 	while 1:
@@ -146,7 +169,7 @@ def receiveSensorData():
 		current = 0
 		power = 0
 		energy = 0
-		if ser.in_waiting:
+		if ser.in_waiting > 0:
 			try:
 				# receivedString = ser.read_until().decode("utf-8")
 				receivedString = ser.readline().decode("utf-8")
@@ -176,7 +199,7 @@ def receiveSensorData():
 						current = float(receivedString.split('(')[5])
 						power = float(receivedString.split('(')[6])
 						energy = float(receivedString.split('(')[7])
-						checksumArduino = float(int(receivedString.split('(')[8]))
+						checksumArduino =int(receivedString.split('(')[8])
 						# print("checksum arduino")
 						# print(checksumArduino)
 						# print(voltage)
@@ -234,10 +257,12 @@ def receiveSensorData():
 						# checksumPi = calculateChecksum(readingsArr, voltage, current, power, energy)
 						# print("checksum pi")
 						# print(checksumPi)
-						# if checksumPi == checksumArduino:
-						#print("checksum correct!")
-							# send ack to arduino
-						ser.write(b'\x01\x01\x01')
+						isCheckSumSuccess = True
+						# if checksumPi != checksumArduino:
+						# 	print("checksum wrong!")
+						# 	isCheckSumSuccess = False
+							
+						ser.write(ACK)
 						readingsarr = np.array(readingsArr)
 						readingsarr = readingsarr.reshape(-1, len(readingsarr))
 						csv_data = csv_data.append(pd.DataFrame(readingsarr))
@@ -246,7 +271,6 @@ def receiveSensorData():
 						# print(current)
 						# print(power)
 						# print(energy)
-						isCheckSumSuccess = True
 						numCorrectData = numCorrectData + 1
 						# else:
 						# 	print("checksum wrong")
@@ -260,9 +284,11 @@ def receiveSensorData():
 			except ValueError or IndexError:
 				print("Error while parsing received string!")
 				continue
+		# else:
+		# 	print("nothing in serial")
 		
-		if (time.time() - timeBefore) > 10:
-			print("10 seconds over!")
+		if (time.time() - timeBefore) > 40:
+			print("40 seconds over!")
 			print(numReceivedString)
 			print(numCorrectData)
 			csv_data.to_csv('sensor_data.csv', index = None, header=False)
@@ -281,22 +307,42 @@ def receiveSensorData():
 		 #    print(key)
 		 #    sock.send(stringToSend) #need to encode as a string as it is what is expected on server side
 
-# handshake with Arduino
+# # handshake with Arduino
 isHandShakeSuccessful = handshake()
 
-if isHandShakeSuccessful == 1:
-	print("handshake success")
-elif isHandShakeSuccessful == 0:
-	print("handshake failed")
+# if isHandShakeSuccessful == 1:
+# 	print("handshake success")
+# elif isHandShakeSuccessful == 0:
+# 	print("handshake failed")
 
 
-if (isHandShakeSuccessful == 1):
-	# t1 = threading.Thread(target=storeInBuffer)
-	# t2 = threading.Thread(target=receiveSensorData)
+# if (isHandShakeSuccessful == 1) and connectToServer('localhost', 7654):
+# 	# t1 = threading.Thread(target=storeInBuffer)
+# 	# t2 = threading.Thread(target=receiveSensorData)
 
-	# t1.start()
-	# t2.start()
+# 	# t1.start()
+# 	# t2.start()
 
-	# while 1:
-	# 	#pass
+# 	# while 1:
+# 	# 	#pass
+# 	receiveSensorData()
+if isHandShakeSuccessful:
 	receiveSensorData()
+	# timeBefore = time.time()
+	# numStrings = 0
+	# while 1:
+	# 	if (time.time() - timeBefore) > 10:
+	# 		print(numStrings)
+	# 		break
+	# 	if ser.in_waiting > 0:
+	# 		try:
+	# 			# receivedString = ser.read_until().decode("utf-8")
+	# 			receivedString = ser.readline().decode("utf-8")
+	# 			print(receivedString)
+	# 			numStrings = numStrings + 1
+	# 		except Exception as e:
+	# 			print(e)
+	# 			print("error")
+	# 			continue
+	# 	else:
+	# 		print("nothing in serial")
