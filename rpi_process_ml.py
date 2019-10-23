@@ -51,7 +51,7 @@ x = 0
 
 
 # Initialize ML global variables
-MODEL = load('rf.joblib')
+MODEL = load('rf22_2.joblib')
 #window_size = 30
 max_consecutive_agrees = 10 
 reverse_label_map = {
@@ -59,7 +59,7 @@ reverse_label_map = {
         1: "cowboy",
         2: "handmotor",
         3: "rocket",
-        4: "tapshoulder",
+        4: "tapshoulders",
         5: "hunchback",
 	99: "idle"
 }
@@ -169,6 +169,17 @@ def storeInBuffer():
 		if ser.in_waiting:
 			receiveBuffer.append(ser.read_until().decode("utf-8"))
 
+def formMessage(action, voltage, current, power, cumPower):
+	message = "#" + action + "|" + str(format(voltage, '.2f')) + "|" + str(format(current, '.2f')) + "|" + str(format(power, '.2f')) + "|" + str(format(cumPower, '.2f')) + "|"
+	return message.strip()
+
+#send data to server
+def sendToServer(action, voltage, current, power, cumPower):
+    messageToSend = formMessage(action, voltage, current, power, cumPower)
+    
+    stringToSend = encryptText(messageToSend, key)
+    sock.send(stringToSend) #need to encode as a string as it is what is expected on server side
+
 def receiveSensorData():
 	packetid = -1
 	deviceid = -1
@@ -186,7 +197,8 @@ def receiveSensorData():
 	ml_buffer = deque()
 	current_prediction = None
 	consecutive_agrees = 0
-	window_size = 8
+	window_size = 22
+	predictionDelay = 0.5
 	print("receive sensor data")
 
 	while 1:
@@ -195,7 +207,7 @@ def receiveSensorData():
 		voltage = 0
 		current = 0
 		power = 0
-		energy = 0
+		cumPower = 0
 		if ser.in_waiting > 0:
 			try:
 				# receivedString = ser.read_until().decode("utf-8")
@@ -225,7 +237,7 @@ def receiveSensorData():
 						voltage = float(receivedString.split('(')[4])
 						current = float(receivedString.split('(')[5])
 						power = float(receivedString.split('(')[6])
-						energy = float(receivedString.split('(')[7])
+						cumPower = float(receivedString.split('(')[7])
 						checksumArduino =int(receivedString.split('(')[8])
 						# print("checksum arduino")
 						# print(checksumArduino)
@@ -343,23 +355,15 @@ def receiveSensorData():
 			if current_prediction is None or prediction == current_prediction:
 				consecutive_agrees += 1
 				if consecutive_agrees == max_consecutive_agrees:
-					if reverse_label_map[prediction] != 'idle':
-						print("Predicted move is {}".format(reverse_label_map[prediction]))
+					action = reverse_label_map[prediction]
+					if action != 'idle':
+						print("Predicted move is {}".format(action))
 						consecutive_agrees = 0
+						sendToServer(action, voltage, current, power, cumPower)
+						time.sleep(predictionDelay)
 			else:
 				consecutive_agrees = 0
 			current_prediction = prediction
-
-
-			# #send data to server
-		 #    action = input("#'action'|'voltage'|'current'|'power'|'cumpower'|\n")#padding to ensure that the message is of fixed size
-		 #    temp = str(action)
-		 #    temp = temp.strip()
-		 #    stringToSend = encryptText(temp, key)
-		 #    print(str(len(stringToSend)))
-		 #    print(stringToSend)
-		 #    print(key)
-		 #    sock.send(stringToSend) #need to encode as a string as it is what is expected on server side
 
 # # handshake with Arduino
 isHandShakeSuccessful = handshake()
