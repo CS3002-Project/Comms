@@ -53,8 +53,8 @@ const int MPU = 0x68; // MPU6050 I2C addresses
 
 //power variables
 // Constants
-const int CURRENT_PORT = A0;           // Input pin for measuring Vout
-const int VOLTAGE_PORT = A1;
+const int CURRENT_PORT = A14;           // Input pin for measuring Vout
+const int VOLTAGE_PORT = A15;
 const int RS = 10;                      // Shunt resistor value (in ohms)
 const int VOLTAGE_REF = 5;              // Reference voltage for analog read
 const int RL = 10000;                   // Load resistor value (in ohms)

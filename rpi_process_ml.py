@@ -51,9 +51,9 @@ x = 0
 
 
 # Initialize ML global variables
-MODEL = load('rf22_2.joblib')
+MODEL = load('rf24_v2rocket.joblib')
 #window_size = 30
-max_consecutive_agrees = 10 
+max_consecutive_agrees = 10
 reverse_label_map = {
         0: "bunny",
         1: "cowboy",
@@ -73,8 +73,8 @@ reverse_label_map = {
 #    sys.exit()
 # host = 'localhost'
 # PORT_NUM = 7654
-#host = sys.argv[1]
-#PORT_NUM = int(sys.argv[2])
+host = sys.argv[1]
+PORT_NUM = int(sys.argv[2])
 
 def encryptText(plainText, key):
     raw = pad(plainText)
@@ -197,7 +197,7 @@ def receiveSensorData():
 	ml_buffer = deque()
 	current_prediction = None
 	consecutive_agrees = 0
-	window_size = 22
+	window_size = 24
 	predictionDelay = 0.5
 	print("receive sensor data")
 
@@ -359,7 +359,8 @@ def receiveSensorData():
 					if action != 'idle':
 						print("Predicted move is {}".format(action))
 						consecutive_agrees = 0
-						sendToServer(action, voltage, current, power, cumPower)
+						if (time.time() - timeBefore) >= 55:
+							sendToServer(action, voltage, current, power, cumPower)
 						time.sleep(predictionDelay)
 			else:
 				consecutive_agrees = 0
@@ -384,7 +385,7 @@ isHandShakeSuccessful = handshake()
 # 	# while 1:
 # 	# 	#pass
 # 	receiveSensorData()
-if isHandShakeSuccessful and connectToServer('localhost', 7654):
+if isHandShakeSuccessful and connectToServer(host, PORT_NUM):
 	print("before receive sensor data")
 	receiveSensorData()
 	# timeBefore = time.time()
