@@ -360,8 +360,8 @@ def receiveSensorData():
 		# Start machine learning logic
 		#print(len(ml_buffer))
 		if len(ml_buffer) >= window_size:
-			feature_vector = np.concatenate(ml_buffer).reshape(1, -1)
-			prediction = MODEL.predict(feature_vector)[0]
+			#feature_vector = np.concatenate(ml_buffer).reshape(1, -1)
+			prediction = MODEL.predict(feature_extraction(ml_buffer))
 			#print("quick prediction")
 			#print(prediction)
 			ml_buffer.clear()
