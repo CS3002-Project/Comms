@@ -315,7 +315,7 @@ def receiveSensorData():
 							backsensorAccx, backsensorAccy, backsensorAccz,
 							backsensorGyrox, backsensorGyroy, backsensorGyroz
 						]
-						ml_buffer.append(np.array(ml_snapshot))
+						ml_buffer.append(ml_snapshot)
 
 						# checksumPi = calculateChecksum(readingsArr, voltage, current, power, energy)
 						# print("checksum pi")
@@ -361,6 +361,7 @@ def receiveSensorData():
 		#print(len(ml_buffer))
 		if len(ml_buffer) >= window_size:
 			#feature_vector = np.concatenate(ml_buffer).reshape(1, -1)
+            ml_buffer = np.array(ml_buffer)
 			prediction = MODEL.predict(feature_extraction(ml_buffer))
 			#print("quick prediction")
 			#print(prediction)
