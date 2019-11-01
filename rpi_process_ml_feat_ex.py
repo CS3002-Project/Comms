@@ -62,7 +62,10 @@ reverse_label_map = {
         3: "rocket",
         4: "tapshoulders",
         5: "hunchback",
-	99: "idle"
+        6: "james",
+        7: "chicken",
+        8: "movingsalute",
+        9: "whip"
 }
 
 # End ML global variables
