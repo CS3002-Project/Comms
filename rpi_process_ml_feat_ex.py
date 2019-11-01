@@ -19,6 +19,7 @@ import numpy as np
 import pickle
 from joblib import load
 from collections import deque
+import itertools
 
 #initialise serial port
 port = "/dev/ttyS0"
@@ -82,6 +83,7 @@ def feature_extraction(window_rows):
     ## winows_rows are list of list
 
     feature_extracted_row = []
+    feature_extracted_row.extend(list(itertools.chain.from_iterable(window_rows)))
     feature_extracted_row.extend(window_rows.mean(0))
     feature_extracted_row.extend(window_rows.min(0))
     feature_extracted_row.extend(window_rows.max(0))
