@@ -52,7 +52,7 @@ x = 0
 
 
 # Initialize ML global variables
-MODEL = load('rf24_v2rocket.joblib')
+MODEL = load('rf_feat_16.joblib')
 #window_size = 30
 max_consecutive_agrees = 12
 reverse_label_map = {
@@ -215,7 +215,7 @@ def receiveSensorData():
 	ml_buffer = deque()
 	current_prediction = None
 	consecutive_agrees = 0
-	window_size = 12
+	window_size = 16
 	predictionDelay = 0.5
 	print("receive sensor data")
 
