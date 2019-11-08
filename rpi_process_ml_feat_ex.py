@@ -54,7 +54,7 @@ x = 0
 # Initialize ML global variables
 MODEL = load('rf24_v2rocket.joblib')
 #window_size = 30
-max_consecutive_agrees = 10
+max_consecutive_agrees = 12
 reverse_label_map = {
         0: "bunny",
         1: "cowboy",
@@ -215,7 +215,7 @@ def receiveSensorData():
 	ml_buffer = deque()
 	current_prediction = None
 	consecutive_agrees = 0
-	window_size = 24
+	window_size = 12
 	predictionDelay = 0.5
 	print("receive sensor data")
 
@@ -333,7 +333,7 @@ def receiveSensorData():
 						ser.write(ACK)
 						readingsarr = np.array(readingsArr)
 						readingsarr = readingsarr.reshape(-1, len(readingsarr))
-						csv_data = csv_data.append(pd.DataFrame(readingsarr))
+						#csv_data = csv_data.append(pd.DataFrame(readingsarr))
 						#print(readingsArr)
 						# print(voltage)
 						# print(current)
