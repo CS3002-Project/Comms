@@ -80,17 +80,41 @@ reverse_label_map = {
 host = sys.argv[1]
 PORT_NUM = int(sys.argv[2])
 
+def extract_skewness(channel_features):
+    skewness = skew(channel_features, axis=0)
+    return skewness
+
+
+def extract_average_amplitude_change(channel_features):
+    amplitude_changes = []
+    for i in range(0, len(channel_features)-1):
+        amplitude_changes.append(np.abs(channel_features[i+1]-channel_features[i]))
+    return np.mean(amplitude_changes, axis=0)
+
+def extract_average_moving_rms(channel_features):
+    moving_rms = []
+    for i in range(0, len(channel_features)-1):
+        moving_rms.append(mean_squared_error(channel_features[i+1],
+                                             channel_features[i], multioutput='raw_values'))
+    return np.mean(moving_rms, axis=0)
+
+def extract_poly_fit(channel_features):
+    poly_coeff = np.polyfit(range(len(channel_features)), channel_features, 1)
+    return poly_coeff.flatten()
+
 # Passes in a list of list (Size of list according to window size)
 # Returns an appended list of feature_extracted values E.g [Mean1, Mean2, ...., Min1, Min2, ....., Max1, Max2, ...., SD1, ....]
 def feature_extraction(window_rows):
-    ## winows_rows are list of list
-
     feature_extracted_row = []
-    #feature_extracted_row.extend(list(itertools.chain.from_iterable(window_rows)))
+    feature_extracted_row.extend(window_rows[0])
     feature_extracted_row.extend(window_rows.mean(0))
+    feature_extracted_row.extend(extract_average_moving_rms(window_rows))
     feature_extracted_row.extend(window_rows.min(0))
     feature_extracted_row.extend(window_rows.max(0))
     feature_extracted_row.extend(window_rows.std(0))
+    feature_extracted_row.extend(extract_poly_fit(window_rows))
+    feature_extracted_row.extend(extract_skewness(window_rows))
+    feature_extracted_row.extend(extract_average_amplitude_change(window_rows))
 
     return feature_extracted_row
 
