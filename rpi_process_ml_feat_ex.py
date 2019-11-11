@@ -52,9 +52,9 @@ x = 0
 
 
 # Initialize ML global variables
-MODEL = load('rf_feat_16.joblib')
+MODEL = load('rf_feat_32_withoutorg.joblib')
 #window_size = 30
-max_consecutive_agrees = 12
+max_consecutive_agrees = 5
 reverse_label_map = {
         0: "bunny",
         1: "cowboy",
@@ -86,7 +86,7 @@ def feature_extraction(window_rows):
     ## winows_rows are list of list
 
     feature_extracted_row = []
-    feature_extracted_row.extend(list(itertools.chain.from_iterable(window_rows)))
+    #feature_extracted_row.extend(list(itertools.chain.from_iterable(window_rows)))
     feature_extracted_row.extend(window_rows.mean(0))
     feature_extracted_row.extend(window_rows.min(0))
     feature_extracted_row.extend(window_rows.max(0))
@@ -215,7 +215,7 @@ def receiveSensorData():
 	ml_buffer = deque()
 	current_prediction = None
 	consecutive_agrees = 0
-	window_size = 16
+	window_size = 32
 	predictionDelay = 0.5
 	print("receive sensor data")
 
@@ -366,13 +366,13 @@ def receiveSensorData():
 		#print(len(ml_buffer))
 		if len(ml_buffer) >= window_size:
 			#feature_vector = np.concatenate(ml_buffer).reshape(1, -1)
-            ml_buffer = np.array(ml_buffer)
-			prediction = MODEL.predict(feature_extraction(ml_buffer))
+			prediction = MODEL.predict(np.array(feature_extraction(np.array(ml_buffer))).reshape(1, -1))[0]
 			#print("quick prediction")
 			#print(prediction)
 			ml_buffer.clear()
 			if current_prediction is None or prediction == current_prediction:
 				consecutive_agrees += 1
+				print(prediction)
 				if consecutive_agrees == max_consecutive_agrees:
 					action = reverse_label_map[prediction]
 					if action != 'idle':
