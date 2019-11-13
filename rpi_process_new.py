@@ -410,6 +410,7 @@ def receiveSensorData():
 			input_buffer.append(feature_vector)
 			#prediction, confidence = MODEL.predict(feature_extraction(np.array(ml_buffer)))
 			ml_buffer.popleft()
+
 		if len(input_buffer) == prediction_window_size:
 			predictions, confidences = predict_ml(MODEL, MLP_MODEL, np.array(input_buffer))
 			if len(set(predictions)) == 1 and np.min(confidences) > min_confidence:  # prediction is taken
