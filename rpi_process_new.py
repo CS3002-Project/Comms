@@ -54,7 +54,7 @@ x = 0
 
 
 # Initialize ML global variables
-MODEL = load('rf_without_mlp.joblib')
+MODEL = load('rf_100pc.joblib')
 # MLP_MODEL = load('mlp_combine.joblib')
 MLP_MODEL = None
 
@@ -262,10 +262,11 @@ def receiveSensorData():
 	input_buffer = deque()
 	current_prediction = None
 	consecutive_agrees = 0
+	min_consecutive_agrees = 1
 	feature_window_size = 10
 	prediction_window_size = 24
 	predictionDelay = 0.5
-	min_confidence = 0.85
+	min_confidence = 0.6
 	pad_size = 5
 	print("receive sensor data")
 
@@ -409,10 +410,12 @@ def receiveSensorData():
 			feature_vector = np.array(feature_extraction(window_data))
 			input_buffer.append(feature_vector)
 			#prediction, confidence = MODEL.predict(feature_extraction(np.array(ml_buffer)))
-			ml_buffer.popleft()
+			ml_buffer.clear()
 
 		if len(input_buffer) == prediction_window_size:
 			predictions, confidences = predict_ml(MODEL, MLP_MODEL, np.array(input_buffer))
+			print(np.min(confidences))
+			print(predictions)
 			if len(set(predictions)) == 1 and np.min(confidences) > min_confidence:  # prediction is taken
 				prediction = predictions[0]
 				if consecutive_agrees == 0 or prediction == current_prediction:
@@ -427,8 +430,7 @@ def receiveSensorData():
 				else:
 					consecutive_agrees = 1
 				current_prediction = prediction
-			for _ in range(pad_size):
-				input_buffer.popleft()
+			input_buffer.clear()
 
 # # handshake with Arduino
 isHandShakeSuccessful = handshake()
