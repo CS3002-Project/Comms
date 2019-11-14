@@ -70,7 +70,8 @@ reverse_label_map = {
 		6: "james",
 		7: "chicken",
 		8: "movingsalute",
-		9: "whip"
+		9: "whip",
+		10: "logout"
 }
 
 # End ML global variables
