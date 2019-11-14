@@ -267,7 +267,9 @@ def receiveSensorData():
 	feature_window_size = 10
 	prediction_window_size = 24
 	predictionDelay = 0.5
-	min_confidence = 0.6
+	min_confidence = 0.8
+	lower_min_confidence = 0.3
+
 	pad_size = 5
 	print("receive sensor data")
 
@@ -417,21 +419,52 @@ def receiveSensorData():
 			predictions, confidences = predict_ml(MODEL, MLP_MODEL, np.array(input_buffer))
 			# print(np.min(confidences))
 			# print(predictions)
+
+
 			print("Confidence:{} Move:{}".format(np.min(confidences),reverse_label_map[predictions[0]]))
-			if len(set(predictions)) == 1 and np.min(confidences) > min_confidence:  # prediction is taken
-				prediction = predictions[0]
-				if consecutive_agrees == 0 or prediction == current_prediction:
-					consecutive_agrees += 1
-				if consecutive_agrees >= min_consecutive_agrees:
-					action = reverse_label_map[prediction]
-					if action != 'idle':
-						print("Predicted move is {}".format(action))
-						if (time.time() - timeBefore) >= 55:
-							sendToServer(action, voltage, current, power, cumPower)
-						time.sleep(predictionDelay)
-				else:
-					consecutive_agrees = 1
-				current_prediction = prediction
+            if len(set(predictions)) == 1 and np.min(confidences) > min_confidence:  # prediction is taken
+                prediction = predictions[0]
+                predicted_move = reverse_label_map[prediction]
+                result = evaluate(predicted_move, file_path)
+                correct += result
+                if first_correct is None and result == 1:
+                    print("First prediction is correct  from high threshold")
+                    num_correct = num_correct + 1
+                elif first_correct is None:
+                    print("First prediction is wrong  from high threshold")
+                first_correct = result
+                num_prediction += 1
+
+            elif len(set(predictions)) == 1 and np.min(confidences) > lower_min_confidence:  # prediction is taken
+                prediction = predictions[0]
+                if prediction == current_prediction:
+                    predicted_move = reverse_label_map[prediction]
+                    result = evaluate(predicted_move, file_path)
+                    correct += result
+                    if first_correct is None and result == 1:
+                        print("First prediction is correct from low threshold")
+                        num_correct = num_correct + 1
+                    elif first_correct is None:
+                        print("First prediction is wrong  from low threshold")
+                    first_correct = result
+                    num_prediction += 1
+
+                current_prediction = prediction
+
+			# if len(set(predictions)) == 1 and np.min(confidences) > min_confidence:  # prediction is taken
+			# 	prediction = predictions[0]
+			# 	if consecutive_agrees == 0 or prediction == current_prediction:
+			# 		consecutive_agrees += 1
+			# 	if consecutive_agrees >= min_consecutive_agrees:
+			# 		action = reverse_label_map[prediction]
+			# 		if action != 'idle':
+			# 			print("Predicted move is {}".format(action))
+			# 			if (time.time() - timeBefore) >= 55:
+			# 				sendToServer(action, voltage, current, power, cumPower)
+			# 			time.sleep(predictionDelay)
+			# 	else:
+			# 		consecutive_agrees = 1
+			# 	current_prediction = prediction
 			input_buffer.clear()
 
 # # handshake with Arduino
