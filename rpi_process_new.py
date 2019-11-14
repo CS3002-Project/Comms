@@ -414,8 +414,9 @@ def receiveSensorData():
 
 		if len(input_buffer) == prediction_window_size:
 			predictions, confidences = predict_ml(MODEL, MLP_MODEL, np.array(input_buffer))
-			print(np.min(confidences))
-			print(predictions)
+			# print(np.min(confidences))
+			# print(predictions)
+			print("Confidence:{} Move:{}".format(np.min(confidences),reverse_label_map[predictions]))
 			if len(set(predictions)) == 1 and np.min(confidences) > min_confidence:  # prediction is taken
 				prediction = predictions[0]
 				if consecutive_agrees == 0 or prediction == current_prediction:
