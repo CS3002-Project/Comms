@@ -129,31 +129,13 @@ void setup() {
   Serial.begin(115200);
   Serial2.begin(115200);
 
-//  int ishandShakeSuccess = startHandshake();
-//  if (ishandShakeSuccess == 0) {
-//    Serial.println("handshake failed");
-//    return;
-//  }
-//  else if (ishandShakeSuccess == 1) {
-//    Serial.println("handshake success");
-//  }
-
-  //delay(10);
-
-  //sendPackets();
   startHandshake();
   
   xTaskCreate(sendPackets, "sendPackets", STACK_SIZE, NULL, 2, NULL);
-//  //xTaskCreate(receiveData, "receiveData", STACK_SIZE, NULL, 2, NULL);
   vTaskStartScheduler();
 }
 
 void calcPower() {
-//  scaledVoltage = 2.0;
-//  current = 2.0;
-//  energyVal = 2.0;
-//  power = 2.0;
-  
   // Read sensor value from INA169
   rawCurrentReading = analogRead(CURRENT_PORT);
 
@@ -162,31 +144,15 @@ void calcPower() {
 
   // Is = (Vout x 1k) / (RS x RL)
   current = (scaledCurrentReading) / (RS2 * 10);
-//  Serial.print("Current: ");
-//  Serial.print(current, 9);
-//  Serial.println(" A");
-
 
   voltageReading = analogRead(VOLTAGE_PORT);
   scaledVoltage = (voltageReading * 5.0 * 2) / 1023;
-
-//  Serial.print("Voltage: ");
-//  Serial.print(scaledVoltage, 3);
-//  Serial.println(" V");
 
   currTime = millis();
   power = scaledVoltage * scaledCurrentReading;
   energyVal += (current * scaledVoltage *  (currTime - prevTime)/ 1000) / 3600;
 
   prevTime = currTime;
-//
-//  Serial.print("Energy: ");
-//  Serial.print(energyVal, 3);
-//  Serial.println(" Wh");
-//
-//  Serial.print("Power: ");
-//  Serial.print(power, 3);
-//  Serial.println(" W");
 }
 
 void transferDataFloatsToPacket(float *arr, char deviceId) {
@@ -247,11 +213,7 @@ void ExecuteSensor(int value, SensorDataStructure sds) {
 }
 
 void sendPackets(void *p) {
-//  TickType_t xLastWakeTime;
-//  const TickType_t xFrequency = 1;
-//
-// // Initialise the xLastWakeTime variable with the current time.
-//  xLastWakeTime = xTaskGetTickCount();
+
   while(1) {
     TickType_t xCurrWakeTime = xTaskGetTickCount();
 
@@ -276,87 +238,13 @@ void sendPackets(void *p) {
       // serialise into packets and send
     serialize(sendBuffer, &messagePacket);
     int bytesWritten = Serial2.write(sendBuffer);
-//    Serial.println(bytesWritten);
 
-//    int loopCounter = 0;
-//    while (1) {
-//      //Serial.println("waiting for ack for message");
-//  
-//      if (Serial2.available() > 0) {
-//        reply = Serial3.read();
-//        if (reply == 'A') {
-//          Serial.println("msg ack");
-//          //delay(500);
-//          handshake = true;
-//          break;
-//        }
-//        else {
-//          Serial.println("non-ack receive");
-//        }
-//      }
-//  
-//      loopCounter++;
-//      if (loopCounter == 30) {
-//        Serial.println("waited for ack too long");
-//        break;
-//      }
-//   }  
-//    // receive ack from RPi
-//    int numBytes = 0;
-//    char packetLength = -1;
-//    unsigned char packetid = 0;
-//    char checksum = -1;
-//    int loopCounter = 0;
-//    int ackFailed = 0;
-//    while (numBytes < 3) {
-//      //Serial.println("waiting for ack for message");
-//  
-//      if (Serial2.available() > 0) {
-//        if (numBytes == 0)
-//          packetLength = (char)Serial2.read();
-//        else if (numBytes == 1)
-//          packetid = (unsigned char)Serial2.read();
-//        else if (numBytes == 2)
-//          checksum = (char)Serial2.read();
-//        numBytes++;
-//      }
-//  
-//      loopCounter++;
-//      if (loopCounter == 30) {
-//        //Serial.println("waited for ack too long");
-//        ackFailed = 1;
-//        break;
-//      }
-//   }
-//    
-//    // checksum correct
-//    if (checksum == packetid) {
-//      // ack received
-//      if (packetid != ACK) {
-//        ackFailed = 1;
-//      }
-//      else if (packetid == ACK)
-//        dataCount++;
-//    }
-//    else {
-//      ackFailed = 1;
-//    }  
-//  
-//    if (ackFailed == 1) {
-//      //Serial.println("ack failed!");
-//      // Serial3.write(sendBuffer);
-//    }
-  
-    //Serial.println(dataCount);
-    //delay(5);
-//    // Wait for the next cycle.
     vTaskDelayUntil(&xCurrWakeTime,  10 / portTICK_PERIOD_MS);
   }
 }
 
 void loop() {
   // put your main code here, to run repeatedly:
-  // sendPackets();
 }
 
 unsigned int serialize(char *buf, dataPacket *p) {
@@ -428,8 +316,7 @@ unsigned int serialize(char *buf, dataPacket *p) {
     dtostrf(checksum, 1, 0, sensorDataBuf);
     strcat(buf, sensorDataBuf);
   }  
-//  Serial.print("checksum: ");
-//  Serial.println(checksum);
+
   strcat(buf, "\n");
 }
 
@@ -459,123 +346,12 @@ void startHandshake() {
     }
   }
 }
-
-//int startHandshake(){
-//
-//  //Serial.println("Starting handshake..");
-//  int handShakeStage = 0;
-//
-//  char nonDataBuf[4];
-//
-//  dataPacket helloPacket;
-//  helloPacket.packetId = 2;
-//
-//  int numBytes = 0;
-//  char packetLength = -1;
-//  unsigned char packetid = 0;
-//  char checksum = -1;
-//  // receive hello from RPi (packet only contains length, packet id and checksum)
-//  while (numBytes < 3) {
-//    Serial.println("in loop waiting for hello");
-//
-//    if (Serial2.available() > 0) {
-//      if (numBytes == 0)
-//        packetLength = (char)Serial2.read();
-//      else if (numBytes == 1)
-//        packetid = (unsigned char)Serial2.read();
-//      else if (numBytes == 2)
-//        checksum = (char)Serial2.read();
-//      numBytes++;
-//    }
-// }
-//
-//  Serial.println("some bytes received");
-////  dprintf("packetLength: %d", packetLength);
-////  dprintf("packetid: %d", packetid);
-////  dprintf("checksum: %d", checksum);
-//
-//  // checksum correct
-//  if (checksum == packetid) {
-//    // hello received
-//    if (packetid != HELLO) {
-//      return 0;
-//    }
-//  }
-//  else {
-//    return 0;
-//  }  
-//  
-//  Serial.println("hello received!");
-//  
-//
-//  // send ack to RPi
-//  dataPacket ackPacket;
-//  ackPacket.packetId = ACK;
-//  
-//  serialize(sendBuffer, &ackPacket);
-//  Serial2.write(sendBuffer);
-//
-//  Serial.println("Ack sent!");
-//
-//  // receive ack from RPi
-//  numBytes = 0;
-//  packetLength = -1;
-//  packetid = 0;
-//  checksum = -1;
-//  int loopCounter = 0;
-//  while (numBytes < 3) {
-//    Serial.println("in loop waiting for ack");
-//
-//    if (Serial2.available() > 0) {
-//      if (numBytes == 0)
-//        packetLength = (char)Serial2.read();
-//      else if (numBytes == 1)
-//        packetid = (unsigned char)Serial2.read();
-//      else if (numBytes == 2)
-//        checksum = (char)Serial2.read();
-//      numBytes++;
-//    }
-//
-//    loopCounter++;
-//    if (loopCounter == 50)
-//      break;
-// }
-//
-////  dprintf("packetLength: %d", packetLength);
-////  dprintf("packetid: %d", packetid);
-////  dprintf("checksum: %d", checksum);
-//  // checksum correct
-//  if (checksum == packetid) {
-//    // ack received
-//    if (packetid != ACK) {
-//      return 0;
-//    }
-//  }
-//  else {
-//    return 0;
-//  }  
-//  
-//  Serial.println("ack received!");
-//
-//  
-//
-//  return 1;
-//}
   
 void ReadMPUValues() {
   Wire.beginTransmission(MPU);      // Begins communication with the MPU
   Wire.write(0x3B);                 // Register 0x3B upper 8 bits of x-axis acceleration data
   Wire.endTransmission(false);      // End communication
   Wire.requestFrom(MPU, 14, true);  // Request 14 registers
-
-//  // testing with sample data
-//  SensorData.AccX  = sensorData; // Reads in raw x-axis acceleration data
-//  SensorData.AccY  = sensorData; // Reads in raw y-axis acceleration data
-//  SensorData.AccZ  = sensorData; // Reads in raw z-axis acceleration data
-//  SensorData.GyroX = sensorData; // Reads in raw x-axis gyroscope data
-//  SensorData.GyroY = sensorData; // Reads in raw y-axis gyroscope data
-//  SensorData.GyroZ = sensorData; // Reads in raw z-axis gyroscope data
-//  sensorData += 2.0;
   
   SensorData.AccX  = Wire.read() << 8 | Wire.read(); // Reads in raw x-axis acceleration data
   SensorData.AccY  = Wire.read() << 8 | Wire.read(); // Reads in raw y-axis acceleration data
