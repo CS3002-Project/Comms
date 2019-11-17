@@ -1,5 +1,7 @@
 #include <Arduino.h>
 #include <Arduino_FreeRTOS.h>
+#include <avr/power.h>
+#include <avr/sleep.h>
 #include <Wire.h>
 
 #define HAND 4        // Sets Digital 2 pin as hand sensor
@@ -77,6 +79,24 @@ boolean received = false;
 int reply = 0;
 
 void setup() {
+  // Power saving setting all the digital pins to low
+  for (int i = 0; i <= 53; i++) {
+    pinMode(i, OUTPUT);
+    digitalWrite(i, LOW);
+  }
+
+  // Disabling all unnecessary components
+  power_adc_disable();
+  power_spi_disable();
+  power_usart0_disable();
+  power_usart2_disable();
+  power_timer1_disable();
+  power_timer2_disable();
+  power_timer3_disable();
+  power_timer4_disable();
+  power_timer5_disable();
+  power_twi_disable();
+  
   pinMode(HAND, OUTPUT);        // Sets hand digital pin as output pin
   pinMode(FOREARM, OUTPUT);     // Sets forearm digital pin as output pin
   pinMode(BACK, OUTPUT);        // Sets back digital pin as output pin
@@ -359,5 +379,4 @@ void PrintPowerValues(PowerDataStructure PDS) {
   Serial.print("Power: "); Serial.print(PDS.Power, 3); Serial.println(" W");
 }
 
-void loop() { 
-}
+void loop() {}
